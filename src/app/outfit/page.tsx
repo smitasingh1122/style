@@ -5,9 +5,9 @@ import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { PageTransition } from "@/components/ui/PageTransition";
 import { Button } from "@/components/ui/Button";
-import { Loader2, ArrowLeft, Heart, RefreshCw } from "lucide-react";
+import { Loader2, ArrowLeft, Heart, RefreshCw, ExternalLink, ShoppingBag } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
-import { getUserData } from "@/lib/auth";
+import { getUserData, setUserData } from "@/lib/auth";
 import Image from "next/image";
 
 type OutfitResponse = {
@@ -68,6 +68,18 @@ export default function OutfitPage() {
 
         const data = JSON.parse(text);
         setOutfitData(data);
+
+        // Auto-save to wardrobe
+        const wardrobeRaw = getUserData("wardrobe");
+        const wardrobe = wardrobeRaw ? JSON.parse(wardrobeRaw) : [];
+        wardrobe.unshift({
+          ...data,
+          savedAt: new Date().toISOString(),
+          id: `look_${Date.now()}`,
+        });
+        // Keep last 50 looks max
+        if (wardrobe.length > 50) wardrobe.length = 50;
+        setUserData("wardrobe", JSON.stringify(wardrobe));
       } catch (error) {
         console.error("Failed to fetch outfit:", error);
       } finally {
@@ -217,6 +229,109 @@ export default function OutfitPage() {
           </motion.div>
         </div>
       </div>
+
+      {/* Shop This Look Section */}
+      {outfitData && (
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="mt-16"
+        >
+          <div className="flex items-center gap-3 mb-8">
+            <ShoppingBag className="w-6 h-6 text-rosegold" />
+            <h2 className="font-serif text-3xl text-charcoal">Shop This Look</h2>
+          </div>
+          <p className="text-charcoal/60 font-light mb-8">
+            Find similar pieces on your favorite shopping platforms.
+          </p>
+
+          {/* Outfit items as shopping cards */}
+          <div className="flex flex-col gap-6">
+            {[
+              { label: "Top", item: outfitData.outfit.top },
+              { label: "Bottom", item: outfitData.outfit.bottom },
+              { label: "Footwear", item: outfitData.outfit.footwear },
+            ].map(({ label, item }) => {
+              // Extract short search terms (first ~5 meaningful words)
+              const searchQuery = item
+                .replace(/^(A |An |The )/i, "")
+                .split(" ")
+                .slice(0, 6)
+                .join(" ");
+              const encoded = encodeURIComponent(searchQuery);
+
+              const shops = [
+                { name: "Amazon", icon: "🛒", url: `https://www.amazon.in/s?k=${encoded}`, color: "bg-[#FF9900]/10 hover:bg-[#FF9900]/20 border-[#FF9900]/30" },
+                { name: "Myntra", icon: "👗", url: `https://www.myntra.com/${encoded.replace(/%20/g, "-")}`, color: "bg-[#FF3F6C]/10 hover:bg-[#FF3F6C]/20 border-[#FF3F6C]/30" },
+                { name: "Ajio", icon: "🏷️", url: `https://www.ajio.com/search/?text=${encoded}`, color: "bg-[#3E3E56]/10 hover:bg-[#3E3E56]/20 border-[#3E3E56]/30" },
+                { name: "Flipkart", icon: "🛍️", url: `https://www.flipkart.com/search?q=${encoded}`, color: "bg-[#2874F0]/10 hover:bg-[#2874F0]/20 border-[#2874F0]/30" },
+                { name: "H&M", icon: "✨", url: `https://www2.hm.com/en_in/search-results.html?q=${encoded}`, color: "bg-[#E50010]/10 hover:bg-[#E50010]/20 border-[#E50010]/30" },
+                { name: "Zara", icon: "🖤", url: `https://www.zara.com/in/en/search?searchTerm=${encoded}`, color: "bg-charcoal/5 hover:bg-charcoal/10 border-charcoal/20" },
+              ];
+
+              return (
+                <div key={label} className="bg-white p-6 border border-sand/30 shadow-sm">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-widest text-charcoal/50 mb-1">{label}</p>
+                      <p className="text-charcoal font-medium">{item}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {shops.map((shop) => (
+                      <a
+                        key={shop.name}
+                        href={shop.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-200 ${shop.color} text-charcoal`}
+                      >
+                        <span>{shop.icon}</span>
+                        {shop.name}
+                        <ExternalLink className="w-3 h-3 opacity-50" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Accessories as a combined card */}
+            <div className="bg-white p-6 border border-sand/30 shadow-sm">
+              <p className="text-xs uppercase tracking-widest text-charcoal/50 mb-3">Accessories</p>
+              {outfitData.outfit.accessories.map((acc, idx) => {
+                const searchQuery = acc
+                  .replace(/^(A |An |The )/i, "")
+                  .split(" ")
+                  .slice(0, 5)
+                  .join(" ");
+                const encoded = encodeURIComponent(searchQuery);
+
+                return (
+                  <div key={idx} className={`${idx > 0 ? "mt-4 pt-4 border-t border-sand/20" : ""}`}>
+                    <p className="text-charcoal font-medium mb-2 text-sm">{acc}</p>
+                    <div className="flex flex-wrap gap-2">
+                      <a href={`https://www.amazon.in/s?k=${encoded}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border bg-[#FF9900]/10 hover:bg-[#FF9900]/20 border-[#FF9900]/30 text-charcoal transition-all">
+                        🛒 Amazon <ExternalLink className="w-2.5 h-2.5 opacity-50" />
+                      </a>
+                      <a href={`https://www.myntra.com/${encoded.replace(/%20/g, "-")}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border bg-[#FF3F6C]/10 hover:bg-[#FF3F6C]/20 border-[#FF3F6C]/30 text-charcoal transition-all">
+                        👗 Myntra <ExternalLink className="w-2.5 h-2.5 opacity-50" />
+                      </a>
+                      <a href={`https://www.ajio.com/search/?text=${encoded}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border bg-[#3E3E56]/10 hover:bg-[#3E3E56]/20 border-[#3E3E56]/30 text-charcoal transition-all">
+                        🏷️ Ajio <ExternalLink className="w-2.5 h-2.5 opacity-50" />
+                      </a>
+                      <a href={`https://www.flipkart.com/search?q=${encoded}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border bg-[#2874F0]/10 hover:bg-[#2874F0]/20 border-[#2874F0]/30 text-charcoal transition-all">
+                        🛍️ Flipkart <ExternalLink className="w-2.5 h-2.5 opacity-50" />
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </motion.div>
+      )}
     </PageTransition>
   );
 }

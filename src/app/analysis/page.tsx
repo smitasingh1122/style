@@ -61,22 +61,33 @@ export default function AnalysisPage() {
     // Capture frame from video
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    
+    // Wait for video to have valid dimensions
+    let vw = video.videoWidth;
+    let vh = video.videoHeight;
+    if (vw === 0 || vh === 0) {
+      // Wait a moment for the video to report dimensions
+      await new Promise(r => setTimeout(r, 500));
+      vw = video.videoWidth || 640;
+      vh = video.videoHeight || 480;
+    }
+    
+    canvas.width = vw;
+    canvas.height = vh;
     
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     
-    ctx.drawImage(video, 0, 0);
+    ctx.drawImage(video, 0, 0, vw, vh);
     
     // Save captured image for display
     setCapturedImage(canvas.toDataURL("image/jpeg", 0.8));
     
     // Extract center region (face area — center 40% of the frame)
-    const centerX = Math.floor(canvas.width * 0.3);
-    const centerY = Math.floor(canvas.height * 0.2);
-    const regionW = Math.floor(canvas.width * 0.4);
-    const regionH = Math.floor(canvas.height * 0.5);
+    const centerX = Math.floor(vw * 0.3);
+    const centerY = Math.floor(vh * 0.2);
+    const regionW = Math.max(1, Math.floor(vw * 0.4));
+    const regionH = Math.max(1, Math.floor(vh * 0.5));
     
     const imageData = ctx.getImageData(centerX, centerY, regionW, regionH);
     const pixels = Array.from(imageData.data);
