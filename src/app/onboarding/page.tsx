@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { PageTransition } from "@/components/ui/PageTransition";
 import { Button } from "@/components/ui/Button";
+import { useAuth } from "@/components/AuthProvider";
+import { setUserData } from "@/lib/auth";
 
 type OnboardingData = {
   name: string;
@@ -26,6 +28,7 @@ const STEPS = ["Personal", "Body", "Skin", "Style", "Occasion"];
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState<OnboardingData>({
     name: "",
@@ -47,12 +50,19 @@ export default function OnboardingPage() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  // Redirect to auth if not logged in
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push("/auth");
+    }
+  }, [isLoading, isAuthenticated, router]);
+
   const nextStep = () => {
     if (currentStep < STEPS.length - 1) {
       setCurrentStep(curr => curr + 1);
     } else {
-      // Submit form and go to outfit generation
-      localStorage.setItem("styleSenseProfile", JSON.stringify(formData));
+      // Submit form and go to outfit generation — save under user's namespace
+      setUserData("profile", JSON.stringify(formData));
       router.push("/outfit");
     }
   };
@@ -158,7 +168,7 @@ export default function OnboardingPage() {
                         value={formData.gender}
                         onChange={(e) => updateForm("gender", e.target.value)}
                         className="border-b border-sand bg-transparent pb-2 text-lg focus:outline-none focus:border-rosegold transition-colors"
-                        placeholder="e.g., Female, Non-binary"
+                        placeholder="e.g., Male, Female, Non-binary"
                       />
                     </div>
                   </div>

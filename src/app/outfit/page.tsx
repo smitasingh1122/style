@@ -6,6 +6,9 @@ import { useRouter } from "next/navigation";
 import { PageTransition } from "@/components/ui/PageTransition";
 import { Button } from "@/components/ui/Button";
 import { Loader2, ArrowLeft, Heart, RefreshCw } from "lucide-react";
+import { useAuth } from "@/components/AuthProvider";
+import { getUserData } from "@/lib/auth";
+import Image from "next/image";
 
 type OutfitResponse = {
   outfit: {
@@ -13,22 +16,35 @@ type OutfitResponse = {
     bottom: string;
     footwear: string;
     accessories: string[];
-    makeup: string;
+    finishingTouches: string;
+    finishingTouchesLabel: string;
   };
   palette: { hex: string; name: string }[];
   explanation: string;
   affirmation: string;
+  gender: string;
+  styleKey: string;
 };
 
 export default function OutfitPage() {
   const router = useRouter();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [outfitData, setOutfitData] = useState<OutfitResponse | null>(null);
 
   useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push("/auth");
+      return;
+    }
+  }, [authLoading, isAuthenticated, router]);
+
+  useEffect(() => {
+    if (authLoading || !isAuthenticated) return;
+
     const fetchOutfit = async () => {
       try {
-        const profileStr = localStorage.getItem("styleSenseProfile");
+        const profileStr = getUserData("profile");
         if (!profileStr) {
           router.push("/onboarding");
           return;
@@ -41,17 +57,26 @@ export default function OutfitPage() {
           body: JSON.stringify({ profile }),
         });
         
-        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(`Server error: ${res.status}`);
+        }
+
+        const text = await res.text();
+        if (!text) {
+          throw new Error("Empty response from server");
+        }
+
+        const data = JSON.parse(text);
         setOutfitData(data);
       } catch (error) {
-        console.error(error);
+        console.error("Failed to fetch outfit:", error);
       } finally {
         setLoading(false);
       }
     };
 
     fetchOutfit();
-  }, [router]);
+  }, [authLoading, isAuthenticated, router]);
 
   if (loading) {
     return (
@@ -94,6 +119,31 @@ export default function OutfitPage() {
           >
             <h2 className="font-serif text-4xl mb-8">Your Curated Look</h2>
             
+            <div className="relative w-full aspect-[4/5] mb-10 overflow-hidden bg-sand/20">
+              <Image 
+                src={(() => {
+                  if (outfitData.styleKey && outfitData.styleKey !== "default") {
+                    const fallback = outfitData.gender === "male" ? "/generated-male.png" : "/generated-dress.png";
+                    // Map of available specific images
+                    const validCombos = [
+                      "female_minimalist", "female_boho", "female_streetwear", "female_classic",
+                      "male_minimalist", "male_streetwear"
+                    ];
+                    const combo = `${outfitData.gender}_${outfitData.styleKey}`;
+                    if (validCombos.includes(combo)) {
+                      return `/${combo}.png`;
+                    }
+                    return fallback;
+                  }
+                  return outfitData.gender === "male" ? "/generated-male.png" : "/generated-dress.png";
+                })()}
+                alt="AI Generated Outfit Visualization" 
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, 50vw"
+              />
+            </div>
+            
             <div className="flex flex-col gap-6">
               <div className="border-l-2 border-rosegold pl-6">
                 <p className="text-xs tracking-widest text-charcoal/50 uppercase mb-1">Top</p>
@@ -116,8 +166,8 @@ export default function OutfitPage() {
                 </ul>
               </div>
               <div className="border-l-2 border-rosegold pl-6">
-                <p className="text-xs tracking-widest text-charcoal/50 uppercase mb-1">Makeup</p>
-                <p className="text-lg">{outfitData.outfit.makeup}</p>
+                <p className="text-xs tracking-widest text-charcoal/50 uppercase mb-1">{outfitData.outfit.finishingTouchesLabel}</p>
+                <p className="text-lg">{outfitData.outfit.finishingTouches}</p>
               </div>
             </div>
           </motion.div>
